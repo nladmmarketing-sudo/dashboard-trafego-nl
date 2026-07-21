@@ -12,7 +12,7 @@ import hmac
 import streamlit as st
 
 from utils import dados, tema
-from views import executivo, funil_vendas, visao_geral
+from views import executivo, funil_vendas, investimento, visao_geral
 
 st.set_page_config(
     page_title="Tráfego Pago — NL Imóveis",
@@ -96,6 +96,7 @@ with st.spinner("Carregando dados do Supabase…"):
     resumo_mensal = dados.carregar_resumo_mensal()
     ads = dados.carregar_ads()          # None = schema pendente
     funil = dados.carregar_funil()      # None = sem snapshot
+    custos = dados.carregar_custos()    # None = tabela custos pendente
 
 ctx = {
     "ini": ini,
@@ -106,17 +107,22 @@ ctx = {
     "resumo_mensal": resumo_mensal,
     "ads": ads,
     "funil": funil,
+    "custos": custos,
 }
 
 st.markdown("## Tráfego Pago — NL Imóveis")
 
-aba1, aba2, aba3 = st.tabs(["📈  Visão Geral", "🔀  Funil → Vendas", "🏛️  Executivo"])
+aba1, aba2, aba3, aba4 = st.tabs(
+    ["📈  Visão Geral", "🔀  Funil → Vendas", "🏛️  Executivo", "💰  Investimento"]
+)
 with aba1:
     visao_geral.render(ctx)
 with aba2:
     funil_vendas.render(ctx)
 with aba3:
     executivo.render(ctx)
+with aba4:
+    investimento.render(ctx)
 
 st.caption(
     "Fontes: leads via webhook Jetimob→n8n (tempo real) · vendas via sync diário do kanban Jetimob · "

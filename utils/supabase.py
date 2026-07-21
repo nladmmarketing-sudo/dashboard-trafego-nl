@@ -81,3 +81,24 @@ def inserir(tabela: str, linhas: list[dict], on_conflict: str = "") -> None:
     if resp.status_code == 404 or (resp.status_code == 400 and "42P01" in resp.text):
         raise TabelaInexistente(tabela)
     resp.raise_for_status()
+
+
+def atualizar(tabela: str, id_val, campos: dict) -> None:
+    """PATCH de uma linha por id."""
+    url_base, key = _credenciais()
+    url = f"{url_base}/rest/v1/{tabela}?id=eq.{id_val}"
+    headers = _headers(key)
+    headers["Content-Type"] = "application/json"
+    headers["Prefer"] = "return=minimal"
+    resp = requests.patch(url, headers=headers, json=campos, timeout=30)
+    resp.raise_for_status()
+
+
+def deletar(tabela: str, id_val) -> None:
+    """DELETE de uma linha por id."""
+    url_base, key = _credenciais()
+    url = f"{url_base}/rest/v1/{tabela}?id=eq.{id_val}"
+    headers = _headers(key)
+    headers["Prefer"] = "return=minimal"
+    resp = requests.delete(url, headers=headers, timeout=30)
+    resp.raise_for_status()

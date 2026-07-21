@@ -240,6 +240,73 @@ def _ads_demo() -> pd.DataFrame:
     return pd.DataFrame(linhas)[_COLS_ADS]
 
 
+# ── Custos de marketing (CAC real) ───────────────────────────────────
+
+_COLS_CUSTOS = ["id", "categoria", "item", "valor_mensal", "mes_inicio", "mes_fim", "ativo", "obs"]
+CATEGORIAS_CUSTO = ["Plataforma/CRM", "Portais", "Ferramentas/Apps"]
+
+
+def carregar_custos() -> pd.DataFrame | None:
+    """None = tabela não criada. DEMO_ADS=1 devolve custos fictícios."""
+    if os.getenv("DEMO_ADS") == "1":
+        return _custos_demo()
+    try:
+        linhas = buscar_tabela(
+            "custos_marketing",
+            select="id,categoria,item,valor_mensal,mes_inicio,mes_fim,ativo,obs",
+        )
+    except TabelaInexistente:
+        return None
+    df = pd.DataFrame(linhas)
+    if df.empty:
+        return pd.DataFrame(columns=_COLS_CUSTOS)
+    df["valor_mensal"] = pd.to_numeric(df["valor_mensal"], errors="coerce").fillna(0.0)
+    df["mes_inicio"] = pd.to_datetime(df["mes_inicio"], errors="coerce").dt.date
+    df["mes_fim"] = pd.to_datetime(df["mes_fim"], errors="coerce").dt.date
+    df["ativo"] = df["ativo"].fillna(True).astype(bool)
+    return df
+
+
+def custos_do_mes(df: pd.DataFrame, mes: date) -> pd.DataFrame:
+    """Custos aplicáveis a um mês: ativo, mes_inicio<=mês e (mes_fim vazio ou >=mês)."""
+    if df is None or df.empty:
+        return df
+    m1 = mes.replace(day=1)
+
+    def aplica(r):
+        if not bool(r.get("ativo", True)):
+            return False
+        ini = r.get("mes_inicio")
+        if ini is None or pd.isna(ini) or ini > m1:
+            return False
+        fim = r.get("mes_fim")
+        if fim is not None and not pd.isna(fim) and fim < m1:
+            return False
+        return True
+
+    return df[df.apply(aplica, axis=1)]
+
+
+def _custos_demo() -> pd.DataFrame:
+    ini = (hoje_local().replace(day=1) - timedelta(days=200)).replace(day=1)
+    itens = [
+        ("Plataforma/CRM", "Jetimob", 890.0),
+        ("Portais", "ZAP Imóveis", 1200.0),
+        ("Portais", "VivaReal", 800.0),
+        ("Portais", "OLX Pro", 350.0),
+        ("Ferramentas/Apps", "n8n (servidor)", 120.0),
+        ("Ferramentas/Apps", "Z-API (WhatsApp)", 99.0),
+        ("Ferramentas/Apps", "IA (OpenAI/Claude)", 150.0),
+        ("Ferramentas/Apps", "Brevo (e-mail)", 80.0),
+    ]
+    linhas = [
+        {"id": i + 1, "categoria": c, "item": it, "valor_mensal": v,
+         "mes_inicio": ini, "mes_fim": None, "ativo": True, "obs": "demo"}
+        for i, (c, it, v) in enumerate(itens)
+    ]
+    return pd.DataFrame(linhas)[_COLS_CUSTOS]
+
+
 def carregar_funil() -> tuple[pd.DataFrame, pd.Timestamp] | None:
     """Último snapshot do kanban. None = tabela ausente ou nunca sincronizada."""
     try:
