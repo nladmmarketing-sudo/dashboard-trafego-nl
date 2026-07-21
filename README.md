@@ -9,9 +9,13 @@ Cloud** (share.streamlit.io).
 
 | Aba | Para quem | O que mostra |
 |---|---|---|
-| 📈 **Visão Geral** | Gestor (dia a dia) | Investimento, impressões, CTR, CPC, leads/dia, CPL, canais, origens, bairros |
+| 📈 **Visão Geral** | Gestor + equipe | **Mídia paga (estilo V4):** scorecards com tendência (investimento, resultados, cliques, alcance, video plays), eficiência (CTR/CPC/CPM/CPR/frequência), funil de tráfego, resultados por dia e ranking de campanhas. **Captação:** leads/dia, CPL, canais, origens, bairros |
 | 🔀 **Funil → Vendas** | Tráfego + Comercial | Fluxo lead→fechamento, CAC, ROAS, custo por VGV, kanban por etapa, conversão por canal, ranking de corretores |
 | 🏛️ **Executivo** | Diretoria | Mês × mês anterior, VGV oficial, custo por VGV, imóveis/bairros mais procurados, aproveitamento por corretor |
+
+> **Preview sem dados reais:** rode local com `DEMO_ADS=1 streamlit run app.py` para ver
+> a seção de mídia paga preenchida com dados fictícios (padrão imobiliário). No deploy,
+> **não** defina essa variável — o painel mostra o estado real do Supabase.
 
 ## Arquitetura
 

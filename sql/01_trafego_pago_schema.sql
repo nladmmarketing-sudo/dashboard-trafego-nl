@@ -23,6 +23,7 @@ create table if not exists ads_insights_daily (
   cliques_link  bigint      not null default 0,    -- cliques no link
   leads         integer     not null default 0,    -- lead forms / conversões de lead
   mensagens     integer     not null default 0,    -- conversas iniciadas
+  video_plays   bigint      not null default 0,    -- reproduções de vídeo
   fonte         text        not null default 'api',-- 'api' | 'manual'
   criado_em     timestamptz not null default now(),
   unique (dia, plataforma, campanha_id, fonte)

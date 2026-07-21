@@ -39,6 +39,18 @@ def num(v) -> str:
     return f"{int(round(float(v))):,}".replace(",", ".")
 
 
+def num_compacto(v) -> str:
+    """1142365 → '1,1 mi' · 733118 → '733 mil' · 9690 → '9.690'."""
+    if v is None:
+        return "—"
+    v = float(v)
+    if abs(v) >= 1_000_000:
+        return f"{v / 1_000_000:.1f} mi".replace(".", ",")
+    if abs(v) >= 10_000:
+        return f"{v / 1_000:.0f} mil"
+    return num(v)
+
+
 def delta_pct(atual, anterior) -> str | None:
     """Variação percentual pronta para st.metric (None se não calculável)."""
     if anterior in (None, 0) or atual is None:

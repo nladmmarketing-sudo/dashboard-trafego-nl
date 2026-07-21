@@ -42,6 +42,21 @@ CORES_PLATAFORMA = {
     "Google Ads": CORES_CANAIS["Google Ads"],
 }
 
+# Hues independentes por scorecard (cada sparkline é um gráfico de uma cor só —
+# nunca comparados entre si num mesmo eixo, então não precisam de separação CVD).
+COR_INVESTIMENTO = "#2a78d6"   # azul
+COR_RESULTADO = "#008300"      # verde (o desfecho que importa)
+COR_CLIQUES = "#4a3aa7"        # violeta
+COR_ALCANCE = "#eda100"        # âmbar
+COR_VIDEO = "#e87ba4"          # magenta
+
+
+def hex_rgba(hex_cor: str, alpha: float) -> str:
+    """'#2a78d6', 0.1 → 'rgba(42,120,214,0.1)'."""
+    h = hex_cor.lstrip("#")
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return f"rgba({r},{g},{b},{alpha})"
+
 
 def registrar_template_plotly() -> None:
     """Template Plotly do dashboard: grid recessivo, Inter, hover pt-BR."""

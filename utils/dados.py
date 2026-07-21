@@ -9,6 +9,7 @@ Fontes:
 - funil_snapshot       → fotografia do kanban por etapa (sync_funil_jetimob.py)
 """
 
+import os
 import unicodedata
 from datetime import date, timedelta
 
@@ -146,22 +147,81 @@ def carregar_resumo_mensal() -> pd.DataFrame:
     return df[["mes", "tipo", "qtd", "valor", "scraped_at"]]
 
 
+_COLS_ADS = ["dia", "plataforma", "conta", "campanha_id", "campanha", "objetivo",
+             "spend", "impressoes", "alcance", "cliques", "cliques_link",
+             "leads", "mensagens", "video_plays", "fonte"]
+
+
 def carregar_ads() -> pd.DataFrame | None:
-    """None = tabela ainda não criada (schema pendente)."""
+    """None = tabela ainda não criada (schema pendente).
+
+    Com DEMO_ADS=1 no ambiente, devolve um dataset fictício de Meta Ads
+    (padrão imobiliário) para pré-visualizar o layout antes do sync real.
+    """
+    if os.getenv("DEMO_ADS") == "1":
+        return _ads_demo()
     try:
         linhas = buscar_tabela("ads_insights_daily")
     except TabelaInexistente:
         return None
     df = pd.DataFrame(linhas)
     if df.empty:
-        return pd.DataFrame(
-            columns=["dia", "plataforma", "campanha", "objetivo", "spend", "impressoes",
-                     "alcance", "cliques", "cliques_link", "leads", "mensagens", "fonte"]
-        )
+        return pd.DataFrame(columns=_COLS_ADS)
     df["dia"] = pd.to_datetime(df["dia"]).dt.date
-    for c in ("spend", "impressoes", "alcance", "cliques", "cliques_link", "leads", "mensagens"):
+    for c in ("spend", "impressoes", "alcance", "cliques", "cliques_link",
+              "leads", "mensagens", "video_plays"):
+        if c not in df.columns:
+            df[c] = 0
         df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+    for c in ("campanha", "objetivo", "plataforma", "conta", "campanha_id", "fonte"):
+        if c not in df.columns:
+            df[c] = ""
     return df
+
+
+def _ads_demo() -> pd.DataFrame:
+    """Meta Ads fictício, 90 dias, para preview do layout (padrão imobiliário)."""
+    import numpy as np
+
+    rng = np.random.default_rng(42)
+    fim = hoje_local()
+    ini = fim - timedelta(days=89)
+    dias = pd.date_range(ini, fim, freq="D").date
+
+    campanhas = [
+        ("Lançamento Alto Padrão | Ponta Negra", "leads", 1.6),
+        ("Apartamentos 2-3 quartos | Capim Macio", "leads", 1.3),
+        ("Captação Proprietários | Locação", "leads", 0.9),
+        ("Remarketing Site | Todos", "mensagens", 0.7),
+        ("Casas Condomínio | Zona Sul", "mensagens", 1.1),
+    ]
+    linhas = []
+    for c_nome, obj, peso in campanhas:
+        base_spend = 45 * peso
+        for i, d in enumerate(dias):
+            sazonal = 1 + 0.25 * np.sin(i / 6.0) + rng.normal(0, 0.12)
+            sazonal = max(sazonal, 0.35)
+            spend = round(base_spend * sazonal, 2)
+            impressoes = int(spend * rng.uniform(120, 190))
+            alcance = int(impressoes * rng.uniform(0.55, 0.72))
+            cliques = int(impressoes * rng.uniform(0.008, 0.016))
+            cliques_link = int(cliques * rng.uniform(0.6, 0.8))
+            if obj == "leads":
+                leads = max(int(cliques_link * rng.uniform(0.06, 0.13)), 0)
+                mensagens = max(int(cliques_link * rng.uniform(0.02, 0.05)), 0)
+            else:
+                mensagens = max(int(cliques_link * rng.uniform(0.10, 0.20)), 0)
+                leads = max(int(cliques_link * rng.uniform(0.01, 0.03)), 0)
+            video_plays = int(impressoes * rng.uniform(0.35, 0.55))
+            linhas.append({
+                "dia": d, "plataforma": "Meta Ads", "conta": "act_476390709618184",
+                "campanha_id": f"demo-{c_nome[:8]}", "campanha": c_nome, "objetivo": obj,
+                "spend": spend, "impressoes": impressoes, "alcance": alcance,
+                "cliques": cliques, "cliques_link": cliques_link,
+                "leads": leads, "mensagens": mensagens, "video_plays": video_plays,
+                "fonte": "demo",
+            })
+    return pd.DataFrame(linhas)[_COLS_ADS]
 
 
 def carregar_funil() -> tuple[pd.DataFrame, pd.Timestamp] | None:

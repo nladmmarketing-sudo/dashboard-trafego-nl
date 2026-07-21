@@ -74,7 +74,7 @@ def extrair_acao(actions: list[dict] | None, *tipos: str) -> int:
 
 def buscar_insights(cfg: dict, desde: date, ate: date) -> list[dict]:
     campos = ("campaign_id,campaign_name,objective,spend,impressions,reach,"
-              "clicks,inline_link_clicks,actions")
+              "clicks,inline_link_clicks,actions,video_play_actions")
     params = {
         "level": "campaign",
         "time_increment": 1,
@@ -111,6 +111,7 @@ def buscar_insights(cfg: dict, desde: date, ate: date) -> list[dict]:
                 "leads": extrair_acao(row.get("actions"), "lead", "onsite_conversion.lead_grouped"),
                 "mensagens": extrair_acao(row.get("actions"),
                                           "onsite_conversion.messaging_conversation_started_7d"),
+                "video_plays": extrair_acao(row.get("video_play_actions"), "video_view"),
                 "fonte": "api",
             })
         url = payload.get("paging", {}).get("next", "")
