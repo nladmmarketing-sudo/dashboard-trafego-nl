@@ -220,7 +220,45 @@ def _secao_midia(ctx):
         else:
             _placeholder("Série de resultados aparece aqui após o primeiro sync", 340)
 
-    # Linha 4 — campanhas
+    # Linha 4 — por plataforma + melhores anúncios (donut estilo V4)
+    if tem_ads:
+        col_plat, col_donut = st.columns([1, 1.15])
+
+        with col_plat:
+            st.markdown("##### Por plataforma")
+            plat = (
+                ads_per.assign(_result=ads_per["leads"] + ads_per["mensagens"])
+                .groupby("plataforma")
+                .agg(Investimento=("spend", "sum"),
+                     Resultados=("_result", "sum"),
+                     Cliques=("cliques_link", "sum"),
+                     Impressoes=("impressoes", "sum"))
+                .reset_index()
+            )
+            plat["CPR"] = plat.apply(
+                lambda r: r["Investimento"] / r["Resultados"] if r["Resultados"] else None, axis=1)
+            plat["CTR"] = plat.apply(
+                lambda r: r["Cliques"] / r["Impressoes"] if r["Impressoes"] else None, axis=1)
+            plat = plat.sort_values("Investimento", ascending=False)[
+                ["plataforma", "Investimento", "Resultados", "CPR", "CTR"]
+            ].rename(columns={"plataforma": "Plataforma"})
+            st.dataframe(
+                plat, width="stretch", hide_index=True,
+                column_config={
+                    "Investimento": st.column_config.NumberColumn("Investimento", format="R$ %.0f"),
+                    "Resultados": st.column_config.NumberColumn("Resultados", format="%d"),
+                    "CPR": st.column_config.NumberColumn("CPR", format="R$ %.2f"),
+                    "CTR": st.column_config.NumberColumn("CTR", format="percent"),
+                },
+            )
+            st.caption("Google Ads entra por lançamento manual ou por um sync próprio (GAQL) — "
+                       "hoje só o Meta tem sync automático.")
+
+        with col_donut:
+            st.markdown("##### Melhores anúncios (por resultado)")
+            _donut_melhores_anuncios(ads_per)
+
+    # Linha 5 — campanhas
     if tem_ads:
         st.markdown("##### Campanhas — investimento e resultados")
         camp = (
@@ -253,6 +291,44 @@ def _secao_midia(ctx):
         if ads_per["fonte"].eq("demo").any():
             st.caption("🧪 Dados de demonstração (DEMO_ADS=1) — apenas para visualizar o layout. "
                        "Com o sync real do Meta, estes números vêm das campanhas de verdade.")
+
+
+def _donut_melhores_anuncios(ads_per: pd.DataFrame, topn: int = 6):
+    """Donut de anúncios por resultado (rampa azul por rank, top N + Outros)."""
+    tmp = ads_per.assign(_result=ads_per["leads"] + ads_per["mensagens"])
+    tmp = tmp[tmp["anuncio"].fillna("").str.strip() != ""]
+    if tmp.empty or tmp["_result"].sum() == 0:
+        _placeholder("Aparece quando o sync trouxer anúncios com resultados", 320)
+        return
+    por_ad = tmp.groupby("anuncio")["_result"].sum().sort_values(ascending=False)
+    if len(por_ad) > topn:
+        top = por_ad.head(topn)
+        outros = por_ad.iloc[topn:].sum()
+        por_ad = pd.concat([top, pd.Series({"Outros": outros})])
+    # rampa azul clara→escura acompanhando o rank (maior = mais escuro)
+    n = len(por_ad)
+    cores = [tema.RAMPA_AZUL[min(1 + int(i * 5 / max(n - 1, 1)), 6)] for i in range(n)][::-1]
+    fig = go.Figure(
+        go.Pie(
+            labels=por_ad.index.tolist(), values=por_ad.values.tolist(),
+            hole=0.58, sort=False, direction="clockwise",
+            domain=dict(x=[0, 0.52], y=[0, 1]),
+            marker=dict(colors=cores, line=dict(color="#ffffff", width=2)),
+            textinfo="percent", textposition="inside",
+            insidetextorientation="horizontal",
+            hovertemplate="%{label}<br><b>%{value} resultados</b> (%{percent})<extra></extra>",
+        )
+    )
+    total = int(por_ad.sum())
+    fig.update_layout(
+        height=320, showlegend=True,
+        legend=dict(orientation="v", y=0.5, yanchor="middle", x=0.56, font=dict(size=11)),
+        margin=dict(l=8, r=8, t=8, b=8),
+        annotations=[dict(text=f"<b>{total}</b><br>resultados", x=0.26, y=0.5,
+                          xref="paper", yref="paper",
+                          font=dict(size=14, color=tema.INK), showarrow=False)],
+    )
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 
 def _placeholder(texto, altura):

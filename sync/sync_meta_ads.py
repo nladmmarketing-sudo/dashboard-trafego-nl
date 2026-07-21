@@ -73,10 +73,11 @@ def extrair_acao(actions: list[dict] | None, *tipos: str) -> int:
 
 
 def buscar_insights(cfg: dict, desde: date, ate: date) -> list[dict]:
-    campos = ("campaign_id,campaign_name,objective,spend,impressions,reach,"
-              "clicks,inline_link_clicks,actions,video_play_actions")
+    campos = ("campaign_id,campaign_name,adset_name,ad_id,ad_name,objective,"
+              "spend,impressions,reach,clicks,inline_link_clicks,"
+              "actions,video_play_actions")
     params = {
-        "level": "campaign",
+        "level": "ad",  # granularidade por anúncio (habilita o donut de melhores anúncios)
         "time_increment": 1,
         "fields": campos,
         "time_range": json.dumps({"since": desde.isoformat(), "until": ate.isoformat()}),
@@ -102,6 +103,9 @@ def buscar_insights(cfg: dict, desde: date, ate: date) -> list[dict]:
                 "conta": cfg["conta"],
                 "campanha_id": row.get("campaign_id", ""),
                 "campanha": row.get("campaign_name", ""),
+                "conjunto": row.get("adset_name", ""),
+                "anuncio_id": row.get("ad_id", ""),
+                "anuncio": row.get("ad_name", ""),
                 "objetivo": (row.get("objective") or "").lower(),
                 "spend": float(row.get("spend") or 0),
                 "impressoes": int(row.get("impressions") or 0),
@@ -120,7 +124,7 @@ def buscar_insights(cfg: dict, desde: date, ate: date) -> list[dict]:
 
 def upsert_supabase(cfg: dict, linhas: list[dict]) -> None:
     url = (f"{cfg['sb_url'].rstrip('/')}/rest/v1/ads_insights_daily"
-           f"?on_conflict=dia,plataforma,campanha_id,fonte")
+           f"?on_conflict=dia,plataforma,anuncio_id,fonte")
     req = urllib.request.Request(
         url,
         data=json.dumps(linhas).encode(),

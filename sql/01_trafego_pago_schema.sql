@@ -13,8 +13,11 @@ create table if not exists ads_insights_daily (
   dia           date        not null,
   plataforma    text        not null,              -- 'Meta Ads' | 'Google Ads'
   conta         text,                              -- ex.: act_476390709618184
-  campanha_id   text        not null default '',   -- '' quando lançamento manual
+  campanha_id   text        not null default '',
   campanha      text,
+  conjunto      text,                              -- ad set / grupo de anúncios
+  anuncio_id    text        not null default '',   -- chave natural do anúncio ('' se agregado/manual)
+  anuncio       text,                              -- nome do anúncio/criativo
   objetivo      text,                              -- leads | mensagens | engajamento...
   spend         numeric(12,2) not null default 0,  -- em BRL
   impressoes    bigint      not null default 0,
@@ -26,7 +29,9 @@ create table if not exists ads_insights_daily (
   video_plays   bigint      not null default 0,    -- reproduções de vídeo
   fonte         text        not null default 'api',-- 'api' | 'manual'
   criado_em     timestamptz not null default now(),
-  unique (dia, plataforma, campanha_id, fonte)
+  -- chave natural: 1 linha por anúncio por dia por fonte
+  -- (manual usa anuncio_id = 'manual-<dia>' para não colidir)
+  unique (dia, plataforma, anuncio_id, fonte)
 );
 
 create index if not exists idx_ads_insights_dia on ads_insights_daily (dia);
@@ -37,7 +42,7 @@ create index if not exists idx_ads_insights_plataforma on ads_insights_daily (pl
 alter table ads_insights_daily enable row level security;
 
 comment on table ads_insights_daily is
-  'Métricas diárias de mídia paga por campanha (Meta/Google). Alimentada por sync_meta_ads.py ou lançamento manual.';
+  'Métricas diárias de mídia paga por anúncio (Meta/Google). Alimentada por sync_meta_ads.py ou lançamento manual.';
 
 -- 2) Snapshot do funil comercial do Jetimob (kanban)
 --    Alimentada por sync/sync_funil_jetimob.py — cada execução grava

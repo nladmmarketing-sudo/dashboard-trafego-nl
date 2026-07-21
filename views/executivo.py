@@ -254,10 +254,11 @@ def render(ctx: dict) -> None:
                         "plataforma": plataforma,
                         "campanha_id": f"manual-{dia_lanc.isoformat()}",
                         "campanha": obs or "(lançamento manual)",
+                        "anuncio_id": f"manual-{dia_lanc.isoformat()}",
                         "spend": valor,
                         "fonte": "manual",
                     }],
-                    on_conflict="dia,plataforma,campanha_id,fonte",
+                    on_conflict="dia,plataforma,anuncio_id,fonte",
                 )
                 st.cache_data.clear()
                 st.success(f"Investimento de {brl(valor, 2)} registrado em {plataforma}.")
