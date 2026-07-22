@@ -157,9 +157,11 @@ def render(ctx: dict) -> None:
             tab_v = vendas_per.sort_values("data_venda", ascending=False).copy()
             tab_v["Data"] = tab_v["data_venda"].map(lambda d: d.strftime("%d/%m/%Y"))
             tab_v["Cliente"] = tab_v["nome_cliente"].map(nome_abreviado)
+            tab_v["Código"] = tab_v.get("codigo_imovel", "").map(
+                lambda c: str(c).strip() if pd.notna(c) and str(c).strip() else "—")
             tab_v["Valor"] = tab_v["valor"].map(lambda v: brl(v) if pd.notna(v) else "—")
-            tab_v = tab_v[["Data", "Cliente", "tipo_negocio", "Valor", "corretor", "origem_lead"]]
-            tab_v.columns = ["Data", "Cliente", "Tipo", "Valor", "Corretor", "Origem"]
+            tab_v = tab_v[["Data", "Cliente", "Código", "tipo_negocio", "Valor", "corretor", "origem_lead"]]
+            tab_v.columns = ["Data", "Cliente", "Código", "Tipo", "Valor", "Corretor", "Origem"]
             st.dataframe(tab_v, width="stretch", hide_index=True, height=320)
 
     with col_r:
