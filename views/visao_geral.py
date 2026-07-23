@@ -251,12 +251,12 @@ def _secao_midia(ctx):
                     "CTR": st.column_config.NumberColumn("CTR", format="percent"),
                 },
             )
-            st.caption("Google Ads entra por lançamento manual ou por um sync próprio (GAQL) — "
-                       "hoje só o Meta tem sync automático.")
+            st.caption("Meta e Google atualizam sozinhos, de hora em hora (sync automático na nuvem) — "
+                       "Meta via Graph API/n8n, Google via Google Ads Script.")
 
         with col_donut:
             st.markdown("##### Melhores anúncios (por resultado)")
-            _donut_melhores_anuncios(ads_per)
+            _top_anuncios(ads_per)
 
     # Linha 5 — campanhas
     if tem_ads:
@@ -293,42 +293,63 @@ def _secao_midia(ctx):
                        "Com o sync real do Meta, estes números vêm das campanhas de verdade.")
 
 
-def _donut_melhores_anuncios(ads_per: pd.DataFrame, topn: int = 6):
-    """Donut de anúncios por resultado (rampa azul por rank, top N + Outros)."""
+def _top_anuncios(ads_per: pd.DataFrame, topn: int = 7):
+    """Ranking dos melhores anúncios por resultado — nome acima da barra, cor por plataforma."""
     tmp = ads_per.assign(_result=ads_per["leads"] + ads_per["mensagens"])
     tmp = tmp[tmp["anuncio"].fillna("").str.strip() != ""]
     if tmp.empty or tmp["_result"].sum() == 0:
         _placeholder("Aparece quando o sync trouxer anúncios com resultados", 320)
         return
-    por_ad = tmp.groupby("anuncio")["_result"].sum().sort_values(ascending=False)
-    if len(por_ad) > topn:
-        top = por_ad.head(topn)
-        outros = por_ad.iloc[topn:].sum()
-        por_ad = pd.concat([top, pd.Series({"Outros": outros})])
-    # rampa azul clara→escura acompanhando o rank (maior = mais escuro)
-    n = len(por_ad)
-    cores = [tema.RAMPA_AZUL[min(1 + int(i * 5 / max(n - 1, 1)), 6)] for i in range(n)][::-1]
+
+    agg = (
+        tmp.groupby("anuncio")
+        .agg(resultado=("_result", "sum"),
+             investimento=("spend", "sum"),
+             plataforma=("plataforma", lambda s: s.value_counts().idxmax()))
+        .sort_values("resultado", ascending=False)
+        .head(topn)
+        .iloc[::-1]  # maior resultado no topo (eixo y do Plotly cresce pra cima)
+    )
+
+    def _short(nome: str, n: int = 46) -> str:
+        nome = str(nome).strip()
+        return nome if len(nome) <= n else nome[: n - 1] + "…"
+
+    nomes = agg.index.tolist()
+    cores = [tema.CORES_CANAIS.get(p, tema.INK_MUTE) for p in agg["plataforma"]]
+    cpr = [(inv / res) if res else 0 for inv, res in zip(agg["investimento"], agg["resultado"])]
+    custom = list(zip(nomes, agg["plataforma"].tolist(), cpr))
+    ypos = list(range(len(agg)))
+
     fig = go.Figure(
-        go.Pie(
-            labels=por_ad.index.tolist(), values=por_ad.values.tolist(),
-            hole=0.58, sort=False, direction="clockwise",
-            domain=dict(x=[0, 0.52], y=[0, 1]),
-            marker=dict(colors=cores, line=dict(color="#ffffff", width=2)),
-            textinfo="percent", textposition="inside",
-            insidetextorientation="horizontal",
-            hovertemplate="%{label}<br><b>%{value} resultados</b> (%{percent})<extra></extra>",
+        go.Bar(
+            y=ypos,
+            x=agg["resultado"].tolist(),
+            orientation="h",
+            marker=dict(color=cores, cornerradius=5),
+            text=[str(int(v)) for v in agg["resultado"]],
+            textposition="outside",
+            textfont=dict(size=12, color=tema.INK),
+            cliponaxis=False,
+            customdata=custom,
+            hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<br>"
+                          "%{x} resultados · CPR R$ %{customdata[2]:.2f}<extra></extra>",
         )
     )
-    total = int(por_ad.sum())
     fig.update_layout(
-        height=320, showlegend=True,
-        legend=dict(orientation="v", y=0.5, yanchor="middle", x=0.56, font=dict(size=11)),
-        margin=dict(l=8, r=8, t=8, b=8),
-        annotations=[dict(text=f"<b>{total}</b><br>resultados", x=0.26, y=0.5,
-                          xref="paper", yref="paper",
-                          font=dict(size=14, color=tema.INK), showarrow=False)],
+        height=48 * len(agg) + 44,
+        margin=dict(l=6, r=46, t=8, b=8),
+        bargap=0.55,
+        showlegend=False,
+        xaxis=dict(title=None, showgrid=True, zeroline=False),
+        yaxis=dict(showticklabels=False, showgrid=False, range=[-0.6, len(agg) - 0.4]),
+        annotations=[dict(x=0, y=i, text=_short(n), xanchor="left", yanchor="bottom",
+                          yshift=7, showarrow=False, font=dict(size=11, color=tema.INK))
+                     for i, n in enumerate(nomes)],
     )
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    st.caption("🔵 Meta Ads · 🟡 Google Ads — barra = resultados (leads + mensagens) no período; "
+               "passe o mouse para ver o CPR de cada anúncio.")
 
 
 def _placeholder(texto, altura):
