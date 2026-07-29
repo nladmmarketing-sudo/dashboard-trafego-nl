@@ -242,8 +242,12 @@ def _ads_demo() -> pd.DataFrame:
 
 # ── Custos de marketing (CAC real) ───────────────────────────────────
 
-_COLS_CUSTOS = ["id", "categoria", "item", "valor_mensal", "mes_inicio", "mes_fim", "ativo", "obs"]
+_COLS_CUSTOS = ["id", "categoria", "item", "valor_mensal", "mes_inicio", "mes_fim",
+                "ativo", "obs", "periodicidade", "valor_pagamento",
+                "dia_vencimento", "data_vencimento", "setor"]
 CATEGORIAS_CUSTO = ["Plataforma/CRM", "Portais", "Ferramentas/Apps"]
+PERIODICIDADES = ["mensal", "anual", "variavel"]
+SETORES_CUSTO = ["geral", "venda", "locacao"]
 
 
 def carregar_custos() -> pd.DataFrame | None:
@@ -253,7 +257,8 @@ def carregar_custos() -> pd.DataFrame | None:
     try:
         linhas = buscar_tabela(
             "custos_marketing",
-            select="id,categoria,item,valor_mensal,mes_inicio,mes_fim,ativo,obs",
+            select=("id,categoria,item,valor_mensal,mes_inicio,mes_fim,ativo,obs,"
+                    "periodicidade,valor_pagamento,dia_vencimento,data_vencimento,setor"),
         )
     except TabelaInexistente:
         return None
@@ -261,9 +266,36 @@ def carregar_custos() -> pd.DataFrame | None:
     if df.empty:
         return pd.DataFrame(columns=_COLS_CUSTOS)
     df["valor_mensal"] = pd.to_numeric(df["valor_mensal"], errors="coerce").fillna(0.0)
+    df["valor_pagamento"] = pd.to_numeric(df.get("valor_pagamento"), errors="coerce")
+    df["valor_pagamento"] = df["valor_pagamento"].fillna(df["valor_mensal"])
+    df["dia_vencimento"] = pd.to_numeric(df.get("dia_vencimento"), errors="coerce").astype("Int64")
+    df["data_vencimento"] = pd.to_datetime(df.get("data_vencimento"), errors="coerce").dt.date
     df["mes_inicio"] = pd.to_datetime(df["mes_inicio"], errors="coerce").dt.date
     df["mes_fim"] = pd.to_datetime(df["mes_fim"], errors="coerce").dt.date
     df["ativo"] = df["ativo"].fillna(True).astype(bool)
+    df["periodicidade"] = df.get("periodicidade", "mensal").fillna("mensal")
+    df["setor"] = df.get("setor")
+    return df
+
+
+def carregar_pagamentos() -> pd.DataFrame:
+    """Boletos marcados como pagos. Vazio se tabela ausente."""
+    try:
+        linhas = buscar_tabela(
+            "pagamentos",
+            select="id,custo_id,competencia,valor_pago,data_pagamento,obs",
+        )
+    except TabelaInexistente:
+        return pd.DataFrame(columns=["id", "custo_id", "competencia", "valor_pago",
+                                     "data_pagamento", "obs"])
+    df = pd.DataFrame(linhas)
+    if df.empty:
+        return pd.DataFrame(columns=["id", "custo_id", "competencia", "valor_pago",
+                                     "data_pagamento", "obs"])
+    df["custo_id"] = pd.to_numeric(df["custo_id"], errors="coerce").astype("Int64")
+    df["competencia"] = pd.to_datetime(df["competencia"], errors="coerce").dt.date
+    df["data_pagamento"] = pd.to_datetime(df["data_pagamento"], errors="coerce").dt.date
+    df["valor_pago"] = pd.to_numeric(df["valor_pago"], errors="coerce")
     return df
 
 
@@ -301,7 +333,9 @@ def _custos_demo() -> pd.DataFrame:
     ]
     linhas = [
         {"id": i + 1, "categoria": c, "item": it, "valor_mensal": v,
-         "mes_inicio": ini, "mes_fim": None, "ativo": True, "obs": "demo"}
+         "mes_inicio": ini, "mes_fim": None, "ativo": True, "obs": "demo",
+         "periodicidade": "mensal", "valor_pagamento": v,
+         "dia_vencimento": 5 + i, "data_vencimento": None, "setor": "geral"}
         for i, (c, it, v) in enumerate(itens)
     ]
     return pd.DataFrame(linhas)[_COLS_CUSTOS]
