@@ -54,6 +54,20 @@ def render(ctx: dict) -> None:
     c6.metric("Custo por VGV", pct(custo_vgv, 2) if custo_vgv else "—",
               help="Quanto de mídia foi gasto para cada R$ 1 de VGV")
 
+    # ── VGV: vendas + locação (mensal e anualizado) ──────────────────
+    locacoes = vendas_per[vendas_per["tipo_negocio"] == "Locação"]
+    vgv_loc_mes = float(locacoes["valor"].fillna(0).sum())
+    vgv_loc_ano = vgv_loc_mes * 12
+    v1, v2, v3 = st.columns(3)
+    v1.metric("💰 VGV Vendas", brl(vgv, 0), help=f"{qtd_vendas} vendas fechadas no período")
+    v2.metric("🏠 VGV Locação (mês)", brl(vgv_loc_mes, 0),
+              help=f"{qtd_locacoes} locações · soma dos aluguéis mensais fechados no período")
+    v3.metric("🏠 VGV Locação (ano)", brl(vgv_loc_ano, 0),
+              help="Projeção anualizada dos aluguéis fechados (aluguel mensal × 12)")
+    if vgv_loc_mes:
+        st.caption((f"🏠 Locação: **{brl(vgv_loc_mes, 0)}/mês** em aluguéis fechados no período · "
+                    f"projeção anual **{brl(vgv_loc_ano, 0)}**.").replace("$", "\\$"))
+
     if spend is None:
         st.caption("💡 CAC, ROAS e Custo por VGV aparecem quando houver investimento registrado "
                    "(sync do Meta ou lançamento manual na aba Executivo).")
