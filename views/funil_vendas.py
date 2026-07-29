@@ -54,19 +54,26 @@ def render(ctx: dict) -> None:
     c6.metric("Custo por VGV", pct(custo_vgv, 2) if custo_vgv else "—",
               help="Quanto de mídia foi gasto para cada R$ 1 de VGV")
 
-    # ── VGV: vendas + locação (mensal e anualizado) ──────────────────
+    # ── VGV: vendas (período + ritmo mensal) + locação (mês + ano) ────
     locacoes = vendas_per[vendas_per["tipo_negocio"] == "Locação"]
     vgv_loc_mes = float(locacoes["valor"].fillna(0).sum())
     vgv_loc_ano = vgv_loc_mes * 12
-    v1, v2, v3 = st.columns(3)
-    v1.metric("💰 VGV Vendas", brl(vgv, 0), help=f"{qtd_vendas} vendas fechadas no período")
-    v2.metric("🏠 VGV Locação (mês)", brl(vgv_loc_mes, 0),
+    n_meses = (fim.year - ini.year) * 12 + (fim.month - ini.month) + 1
+    vgv_venda_mes = (vgv / n_meses) if n_meses else vgv
+    v1, v2, v3, v4 = st.columns(4)
+    v1.metric("💰 VGV Vendas (período)", brl(vgv, 0),
+              help=f"{qtd_vendas} vendas fechadas de {ini.strftime('%d/%m')} a {fim.strftime('%d/%m')}")
+    v2.metric("💰 VGV Vendas (mês)", brl(vgv_venda_mes, 0),
+              help=f"Ritmo médio mensal: VGV de vendas ÷ {n_meses} mês(es) do período. "
+                   "Se o período for de 1 mês, é o próprio VGV do mês.")
+    v3.metric("🏠 VGV Locação (mês)", brl(vgv_loc_mes, 0),
               help=f"{qtd_locacoes} locações · soma dos aluguéis mensais fechados no período")
-    v3.metric("🏠 VGV Locação (ano)", brl(vgv_loc_ano, 0),
+    v4.metric("🏠 VGV Locação (ano)", brl(vgv_loc_ano, 0),
               help="Projeção anualizada dos aluguéis fechados (aluguel mensal × 12)")
-    if vgv_loc_mes:
-        st.caption((f"🏠 Locação: **{brl(vgv_loc_mes, 0)}/mês** em aluguéis fechados no período · "
-                    f"projeção anual **{brl(vgv_loc_ano, 0)}**.").replace("$", "\\$"))
+    if vgv or vgv_loc_mes:
+        st.caption((f"💰 Vendas: **{brl(vgv, 0)}** no período (~{brl(vgv_venda_mes, 0)}/mês) · "
+                    f"🏠 Locação: **{brl(vgv_loc_mes, 0)}/mês** · projeção anual **{brl(vgv_loc_ano, 0)}**.")
+                   .replace("$", "\\$"))
 
     if spend is None:
         st.caption("💡 CAC, ROAS e Custo por VGV aparecem quando houver investimento registrado "
