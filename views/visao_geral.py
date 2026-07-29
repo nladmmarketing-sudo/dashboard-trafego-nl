@@ -258,6 +258,26 @@ def _secao_midia(ctx):
             st.markdown("##### Melhores anúncios (por resultado)")
             _top_anuncios(ads_per)
 
+        # ── Segmentação: plataforma detalhada / setor (Venda × Locação) ──
+        st.markdown("##### Investimento por segmento")
+        seg = st.radio("Ver por", ["Plataforma", "Setor (Venda × Locação)"],
+                       horizontal=True, label_visibility="collapsed", key="seg_midia")
+        base = ads_per.assign(_result=ads_per["leads"] + ads_per["mensagens"])
+        if seg == "Plataforma":
+            base["_seg"] = base.apply(
+                lambda r: _plataforma_detalhada(r["plataforma"], r.get("campanha", "")), axis=1)
+            cores_seg = {"Google Ads": tema.CORES_CANAIS["Google Ads"],
+                         "Meta Ads": tema.CORES_CANAIS["Meta Ads"],
+                         "Turbinar Instagram": tema.COR_VIDEO}
+            legenda = "Google · Meta (campanhas) · Turbinar Instagram (posts impulsionados)."
+        else:
+            base["_seg"] = base.apply(
+                lambda r: _setor_anuncio(r.get("campanha", ""), r.get("conjunto", "")), axis=1)
+            cores_seg = {"Venda": tema.COR_INVESTIMENTO, "Locação": "#008300"}
+            legenda = ("Classificado por palavra-chave no nome da campanha/conjunto "
+                       "([LOCAÇÃO], [LOC], proprietário… → Locação; o resto → Venda).")
+        _breakdown_segmento(base, cores_seg, legenda)
+
     # Linha 5 — campanhas
     if tem_ads:
         st.markdown("##### Campanhas — investimento e resultados")
@@ -291,6 +311,60 @@ def _secao_midia(ctx):
         if ads_per["fonte"].eq("demo").any():
             st.caption("🧪 Dados de demonstração (DEMO_ADS=1) — apenas para visualizar o layout. "
                        "Com o sync real do Meta, estes números vêm das campanhas de verdade.")
+
+
+def _plataforma_detalhada(plataforma, campanha) -> str:
+    """Meta Ads vs Google Ads vs Turbinar Instagram (posts impulsionados)."""
+    if plataforma == "Google Ads":
+        return "Google Ads"
+    if str(campanha or "").strip().lower().startswith("post do instagram"):
+        return "Turbinar Instagram"
+    return "Meta Ads"
+
+
+_KW_LOCACAO = ("locaç", "locac", "[loc]", "[loc ", "locador", "aluguel", "aluga", "captaç", "propriet")
+
+
+def _setor_anuncio(campanha, conjunto) -> str:
+    """Classifica o anúncio em Venda/Locação por palavra-chave (resto → Venda)."""
+    txt = f"{campanha or ''} {conjunto or ''}".lower()
+    return "Locação" if any(k in txt for k in _KW_LOCACAO) else "Venda"
+
+
+def _breakdown_segmento(base, cores_seg, legenda):
+    agg = (base.groupby("_seg")
+           .agg(Investimento=("spend", "sum"), Resultados=("_result", "sum"),
+                Cliques=("cliques_link", "sum"), Impressoes=("impressoes", "sum"))
+           .reset_index())
+    if agg.empty:
+        return
+    agg["CPR"] = agg.apply(lambda r: r["Investimento"] / r["Resultados"] if r["Resultados"] else None, axis=1)
+    agg = agg.sort_values("Investimento", ascending=False)
+    total_inv = float(agg["Investimento"].sum())
+    col_g, col_t = st.columns([1, 1.1])
+    with col_g:
+        ordem = agg["_seg"].tolist()[::-1]
+        fig = go.Figure(go.Bar(
+            y=ordem, x=agg["Investimento"].tolist()[::-1], orientation="h",
+            marker=dict(color=[cores_seg.get(s, tema.INK_MUTE) for s in ordem], cornerradius=5),
+            text=[brl(v, 0) for v in agg["Investimento"].tolist()[::-1]],
+            textposition="outside", cliponaxis=False,
+            hovertemplate="%{y}: <b>R$ %{x:,.0f}</b><extra></extra>"))
+        fig.update_layout(height=200, showlegend=False, margin=dict(l=8, r=70, t=8, b=8),
+                          xaxis=dict(showgrid=True, zeroline=False), yaxis=dict(showgrid=False))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    with col_t:
+        tab = agg.rename(columns={"_seg": "Segmento"})[["Segmento", "Investimento", "Resultados", "CPR"]]
+        st.dataframe(tab, width="stretch", hide_index=True, column_config={
+            "Investimento": st.column_config.NumberColumn("Investimento", format="R$ %.0f"),
+            "Resultados": st.column_config.NumberColumn("Resultados", format="%d"),
+            "CPR": st.column_config.NumberColumn("CPR", format="R$ %.2f"),
+        })
+    resumo = " · ".join(
+        f"**{r['_seg']}** {brl(r['Investimento'], 0)} "
+        f"({pct(r['Investimento'] / total_inv, 0) if total_inv else '—'})"
+        for _, r in agg.iterrows())
+    st.caption((f"{resumo}. {legenda}").replace("$", "\\$"))
 
 
 def _top_anuncios(ads_per: pd.DataFrame, topn: int = 7):
