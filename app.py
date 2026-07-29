@@ -97,6 +97,7 @@ with st.spinner("Carregando dados do Supabase…"):
     ads = dados.carregar_ads()          # None = schema pendente
     funil = dados.carregar_funil()      # None = sem snapshot
     custos = dados.carregar_custos()    # None = tabela custos pendente
+    pagamentos = dados.carregar_pagamentos()  # boletos pagos
 
 ctx = {
     "ini": ini,
@@ -108,6 +109,7 @@ ctx = {
     "ads": ads,
     "funil": funil,
     "custos": custos,
+    "pagamentos": pagamentos,
 }
 
 st.markdown("## Tráfego Pago — NL Imóveis")
