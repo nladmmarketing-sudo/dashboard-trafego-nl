@@ -47,6 +47,24 @@ def mapear_canal(origem: str | None) -> str:
     return "Direto/Outros"
 
 
+# ── Corretores ───────────────────────────────────────────────────────
+# Unifica variações do mesmo corretor (nome digitado diferente no Jetimob).
+# Chave = nome normalizado (minúsculo, sem acento); valor = nome canônico.
+CORRETORES_ALIASES = {
+    "adriana miranda": "Adriana da Silva Miranda",
+    "ione ferreira": "Ione Ferreira dos Santos",
+}
+
+
+def canonizar_corretor(nome):
+    if nome is None or (isinstance(nome, float) and pd.isna(nome)):
+        return nome
+    nome = str(nome).strip()
+    if not nome:
+        return None
+    return CORRETORES_ALIASES.get(_normalizar(nome), nome)
+
+
 # ── Períodos ─────────────────────────────────────────────────────────
 
 OPCOES_PERIODO = [
@@ -100,7 +118,7 @@ def carregar_leads() -> pd.DataFrame:
     df["origem"] = df["origem"].fillna("").replace("", "(sem origem)")
     df["canal"] = df["origem"].map(mapear_canal)
     df["bairro"] = df["bairro"].fillna("").str.strip().replace("", None)
-    df["corretor"] = df["corretor"].fillna("").str.strip().replace("", None)
+    df["corretor"] = df["corretor"].fillna("").str.strip().replace("", None).map(canonizar_corretor)
     return df
 
 
@@ -130,6 +148,7 @@ def carregar_vendas() -> pd.DataFrame:
             return "Temporada"
         return "Outro"
     df["tipo_negocio"] = df["tipo_negocio"].map(_tipo)
+    df["corretor"] = df["corretor"].map(canonizar_corretor)
     return df
 
 
