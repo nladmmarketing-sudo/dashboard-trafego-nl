@@ -187,11 +187,27 @@ def render(ctx: dict) -> None:
 
     with col_r:
         st.markdown("#### Ranking de corretores")
-        if vendas_per.empty:
-            st.caption("—")
+        # Filtro por setor: Todos / Vendas / Locação (cor acompanha o setor)
+        setor_rank = st.radio(
+            "Setor do ranking", ["Todos", "Vendas", "Locação"],
+            horizontal=True, label_visibility="collapsed", key="rank_setor",
+        )
+        base_rank = vendas_per
+        cor_rank = tema.COR_SERIE
+        if setor_rank == "Vendas":
+            base_rank = vendas_per[vendas_per["tipo_negocio"] == "Venda"]
+            cor_rank = tema.COR_INVESTIMENTO
+        elif setor_rank == "Locação":
+            base_rank = vendas_per[vendas_per["tipo_negocio"] == "Locação"]
+            cor_rank = tema.COR_RESULTADO
+
+        if base_rank.empty:
+            st.caption(f"Nenhum fechamento de {setor_rank.lower()} no período." if setor_rank != "Todos"
+                       else "Nenhum fechamento no período.")
         else:
             rank = (
-                vendas_per.groupby("corretor")
+                base_rank.assign(corretor=base_rank["corretor"].fillna("(sem corretor)"))
+                .groupby("corretor")
                 .agg(Fechamentos=("corretor", "size"), VGV=("valor", "sum"))
                 .sort_values(["Fechamentos", "VGV"], ascending=False).head(8)
             )
@@ -200,15 +216,17 @@ def render(ctx: dict) -> None:
                     y=rank.index.tolist()[::-1],
                     x=rank["Fechamentos"].tolist()[::-1],
                     orientation="h",
-                    marker=dict(color=tema.COR_SERIE, cornerradius=4),
+                    marker=dict(color=cor_rank, cornerradius=4),
                     text=[f"{f}  ·  {brl_compacto(v)}" for f, v in
                           zip(rank["Fechamentos"].tolist()[::-1], rank["VGV"].tolist()[::-1])],
                     textposition="outside",
-                cliponaxis=False,
-                    hovertemplate="%{y}: <b>%{x} fechamentos</b><extra></extra>",
+                    cliponaxis=False,
+                    hovertemplate="%{y}: <b>%{x} fechamento(s)</b><extra></extra>",
                 )
             )
-            fig.update_layout(height=320, showlegend=False,
+            fig.update_layout(height=300, showlegend=False,
                               xaxis=dict(showgrid=True), yaxis=dict(showgrid=False),
                               margin=dict(l=8, r=80, t=8, b=8))
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+            st.caption(f"Top corretores por nº de fechamentos · barra = fechamentos, "
+                       f"texto = fechamentos · VGV · setor: **{setor_rank}**.")
