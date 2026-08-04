@@ -130,11 +130,16 @@ def janela_anterior(ini: date, fim: date) -> tuple[date, date]:
 def carregar_leads() -> pd.DataFrame:
     linhas = buscar_tabela(
         "leads_jetimob",
-        select="created_at,origem,corretor,bairro,cidade,valor,codigo_imovel",
+        select="created_at,origem,corretor,bairro,cidade,valor,codigo_imovel,setor",
     )
     df = pd.DataFrame(linhas)
     if df.empty:
-        return pd.DataFrame(columns=["dia", "origem", "canal", "corretor", "bairro", "cidade", "valor", "codigo_imovel"])
+        return pd.DataFrame(columns=["dia", "origem", "canal", "corretor", "bairro",
+                                     "cidade", "valor", "codigo_imovel", "setor"])
+    # setor ('Venda'/'Locação') vem do enriquecimento — ~93% dos leads.
+    # Ver ~/.jetimob-scraper/enriquecer_setor_leads.py
+    if "setor" not in df.columns:
+        df["setor"] = None
     dt = pd.to_datetime(df["created_at"], utc=True, format="ISO8601").dt.tz_convert(TZ)
     df["dia"] = dt.dt.date
     df["origem"] = df["origem"].fillna("").replace("", "(sem origem)")

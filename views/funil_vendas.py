@@ -36,7 +36,12 @@ def render(ctx: dict) -> None:
     tipo_alvo = {"Vendas": "Venda", "Locação": "Locação"}.get(setor)
     cor = COR_SETOR[setor]
 
-    leads_per = dados.filtrar_canais(dados.filtrar_periodo(ctx["leads"], "dia", ini, fim), canais)
+    leads_tot = dados.filtrar_canais(dados.filtrar_periodo(ctx["leads"], "dia", ini, fim), canais)
+    # Leads do setor: 'setor' vem do enriquecimento (oportunidade do Jetimob +
+    # intenção na mensagem). ~7% ficam sem classificação e não entram no recorte.
+    leads_per = leads_tot if tipo_alvo is None else leads_tot[leads_tot["setor"] == tipo_alvo]
+    sem_setor = int(leads_tot["setor"].isna().sum()) if "setor" in leads_tot else 0
+
     vendas_tot = dados.filtrar_canais(dados.filtrar_periodo(ctx["vendas"], "data_venda", ini, fim), canais)
     # Fechamentos do setor — venda e locação nunca se misturam
     vendas_per = vendas_tot if tipo_alvo is None else vendas_tot[vendas_tot["tipo_negocio"] == tipo_alvo]
@@ -61,26 +66,24 @@ def render(ctx: dict) -> None:
     vgv_foco = {"Vendas": vgv_venda, "Locação": vgv_loc_mes}.get(setor, vgv_venda + vgv_loc_mes)
 
     # ── KPIs ─────────────────────────────────────────────────────────
-    # Leads não têm setor no Jetimob → só fazem sentido em "Todos".
-    leads_ok = setor == "Todos"
+    leads_ok = True  # leads agora têm setor (enriquecimento)
     n_leads = len(leads_per)
-    taxa_conv = (fechamentos / n_leads) if (leads_ok and n_leads) else None
+    taxa_conv = (fechamentos / n_leads) if n_leads else None
     cac = (spend / fechamentos) if spend and fechamentos else None
     roas = (vgv_foco / spend) if spend and vgv_foco else None
     custo_vgv = (spend / vgv_foco) if spend and vgv_foco else None
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("Leads", num(n_leads) if leads_ok else "—",
-              help="Leads captados no período." if leads_ok else
-                   "O webhook do Jetimob não informa se o lead é de venda ou locação, "
-                   "então não dá para separar leads por setor. Veja em 'Todos'.")
+    c1.metric(f"Leads{'' if setor=='Todos' else f' · {setor}'}", num(n_leads),
+              help="Leads captados no período." + ("" if setor == "Todos" else
+                   f" Só leads de {setor.lower()} — o setor vem da oportunidade do lead "
+                   "no Jetimob (ou da intenção na mensagem)."))
     c2.metric(f"Fechamentos{'' if setor=='Todos' else f' · {setor}'}", num(fechamentos),
               help=f"{qtd_vendas} vendas + {qtd_locacoes} locações" if setor == "Todos"
                    else f"Somente {setor.lower()} no período.")
     c3.metric("Conversão lead→fechamento", pct(taxa_conv, 2) if taxa_conv is not None else "—",
               help="Fechamentos ÷ leads do período. Com ciclo longo, parte das vendas veio "
-                   "de leads de meses anteriores." if leads_ok else
-                   "Indisponível por setor (lead sem setor na origem).")
+                   "de leads de meses anteriores.")
     c4.metric("Investimento (mídia)", brl(spend, 0) if spend is not None else "—",
               help="Mídia do período." + ("" if setor == "Todos" else
                    f" Só campanhas classificadas como {setor.lower()} (pelo nome da campanha)."))
@@ -90,9 +93,18 @@ def render(ctx: dict) -> None:
               help="VGV do setor ÷ investimento do setor."
                    + (" Locação usa o aluguel mensal (não anualizado)." if setor == "Locação" else ""))
 
+    cpl = (spend / n_leads) if spend and n_leads else None
     if setor != "Todos":
-        st.caption(f"🔎 Exibindo **somente {setor}** — fechamentos, VGV, investimento, kanban e "
-                   "ranking abaixo consideram apenas este setor.")
+        aviso = (f"🔎 Exibindo **somente {setor}** — leads, fechamentos, VGV, investimento, "
+                 "kanban e ranking consideram apenas este setor.")
+        if cpl:
+            aviso += f" CPL do setor: **{brl(cpl, 2)}**."
+        if sem_setor:
+            aviso += (f" ({sem_setor} lead(s) do período sem setor identificado ficaram de fora — "
+                      "veja em 'Todos'.)")
+        st.caption(aviso.replace("$", "\\$"))
+    elif cpl:
+        st.caption(f"CPL geral do período: **{brl(cpl, 2)}**.".replace("$", "\\$"))
 
     # ── VGV do setor ─────────────────────────────────────────────────
     n_meses = (fim.year - ini.year) * 12 + (fim.month - ini.month) + 1
@@ -149,10 +161,8 @@ def render(ctx: dict) -> None:
         fig.update_layout(title=titulo + ("" if setor == "Todos" else f" · {setor}"),
                           height=340, showlegend=False)
         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-        st.caption("Fluxo real do período: leads que entraram × negócios fechados."
-                   if leads_ok else
-                   "Leads não são separáveis por setor (origem sem essa informação) — "
-                   "aqui só o total de fechamentos do setor.")
+        st.caption("Fluxo real do período: leads que entraram × negócios fechados"
+                   + ("." if setor == "Todos" else f", somente {setor.lower()}."))
 
     # ── Kanban (estoque atual, por setor) ────────────────────────────
     with col_kanban:
