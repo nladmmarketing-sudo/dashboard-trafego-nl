@@ -47,6 +47,28 @@ def mapear_canal(origem: str | None) -> str:
     return "Direto/Outros"
 
 
+# ── Setor do negócio (Venda × Locação) ───────────────────────────────
+# O Jetimob não marca o setor no anúncio; classificamos pelo nome da
+# campanha/conjunto. Usado na Visão Geral (split de verba) e no Funil
+# (CAC/ROAS por setor).
+_KW_LOCACAO = ("locaç", "locac", "[loc]", "[loc ", "locador", "aluguel",
+               "aluga", "captaç", "propriet")
+
+
+def setor_anuncio(campanha, conjunto="") -> str:
+    """Classifica um anúncio em 'Venda' ou 'Locação' por palavra-chave."""
+    txt = f"{campanha or ''} {conjunto or ''}".lower()
+    return "Locação" if any(k in txt for k in _KW_LOCACAO) else "Venda"
+
+
+def filtrar_ads_por_setor(ads: pd.DataFrame, setor: str) -> pd.DataFrame:
+    """Recorta o investimento pelo setor da campanha ('Venda'/'Locação')."""
+    if ads is None or ads.empty or setor not in ("Venda", "Locação"):
+        return ads
+    seg = ads.apply(lambda r: setor_anuncio(r.get("campanha", ""), r.get("conjunto", "")), axis=1)
+    return ads[seg == setor]
+
+
 # ── Corretores ───────────────────────────────────────────────────────
 # Unifica variações do mesmo corretor (nome digitado diferente no Jetimob).
 # Chave = nome normalizado (minúsculo, sem acento); valor = nome canônico.
