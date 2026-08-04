@@ -85,53 +85,46 @@ def fetch_funnels(page) -> dict[str, int]:
 
 
 def snapshot_contrato(page, contrato: str, funnel_id: int) -> list[dict]:
-    """Percorre todas as páginas do kanban (status aberto) somando por etapa."""
-    etapas: dict[str, dict] = {}
-    ordem: list[str] = []
-    pg = 1
-    while True:
-        url = (
-            f"{BASE_URL}/api/oportunidades/kanban"
-            f"?busca=&funnel_id={funnel_id}&contrato={contrato}&responsavel=&status="
-            f"&atualizacao=&etapa=&temperatura=&fonte_prospeccao=&portal="
-            f"&rede_social=&createdDate=&updatedDate=&agendamento=&labels="
-            f"&headquarter=&page={pg}"
-        )
-        payload = fetch_json(page, url)
-        if not payload or "data" not in payload:
-            break
-        data = payload["data"]
-        opps = data.get("opportunities", [])
-        if isinstance(opps, dict):
-            opps = list(opps.values())
+    """Contagem por etapa direto dos totais que a API do kanban já devolve.
 
-        itens_pagina = 0
-        for etapa in opps:
-            nome = etapa.get("name", "(sem etapa)")
-            if nome not in etapas:
-                etapas[nome] = {"qtd": 0, "valor": 0.0}
-                ordem.append(nome)
-            items = etapa.get("items") or []
-            if isinstance(items, dict):
-                items = list(items.values())
-            for it in items:
-                etapas[nome]["qtd"] += 1
-                bruto = int(it.get("maxValue") or 0)
-                etapas[nome]["valor"] += round(bruto / 100, 2) if bruto >= 100 else float(bruto)
-                itens_pagina += 1
+    A API expõe, em cada etapa, `total` (nº de oportunidades) e `amount_price`
+    (soma em centavos) — números idênticos aos do kanban na tela do Jetimob.
+    Usar isso em vez de paginar item a item é ~60× mais rápido (1 request em
+    vez de ~128 páginas) e não corre risco de perder itens no meio da paginação.
+    Auditado em 04/08/2026: bateu etapa a etapa com a tela do Jetimob.
+    """
+    url = (
+        f"{BASE_URL}/api/oportunidades/kanban"
+        f"?busca=&funnel_id={funnel_id}&contrato={contrato}&responsavel=&status="
+        f"&atualizacao=&etapa=&temperatura=&fonte_prospeccao=&portal="
+        f"&rede_social=&createdDate=&updatedDate=&agendamento=&labels="
+        f"&headquarter=&page=1"
+    )
+    payload = fetch_json(page, url)
+    if not payload or "data" not in payload:
+        print(f"    ⚠️ sem resposta para {contrato}")
+        return []
 
-        total_api = data.get("total_items", 0)
-        soma = sum(e["qtd"] for e in etapas.values())
-        print(f"    pág {pg}: +{itens_pagina} (acum. {soma}/{total_api})")
-        if not itens_pagina or soma >= total_api:
-            break
-        pg += 1
+    data = payload["data"]
+    opps = data.get("opportunities", [])
+    if isinstance(opps, dict):
+        opps = list(opps.values())
 
-    return [
-        {"contrato": contrato, "etapa": nome, "posicao_etapa": i,
-         "qtd": etapas[nome]["qtd"], "valor_total": round(etapas[nome]["valor"], 2)}
-        for i, nome in enumerate(ordem)
-    ]
+    linhas = []
+    for i, etapa in enumerate(opps):
+        nome = etapa.get("name", "(sem etapa)")
+        qtd = int(etapa.get("total") or 0)
+        # amount_price vem em centavos
+        valor = round(int(etapa.get("amount_price") or 0) / 100, 2)
+        linhas.append({"contrato": contrato, "etapa": nome, "posicao_etapa": i,
+                       "qtd": qtd, "valor_total": valor})
+
+    total_api = int(data.get("total_items") or 0)
+    soma = sum(l["qtd"] for l in linhas)
+    print(f"    {len(linhas)} etapas · {soma} oportunidades (API informa {total_api})")
+    if total_api and soma != total_api:
+        print(f"    ⚠️ divergência: soma das etapas ({soma}) ≠ total_items ({total_api})")
+    return linhas
 
 
 def inserir_supabase(sb_url: str, sb_key: str, linhas: list[dict]) -> None:
