@@ -413,12 +413,39 @@ def carregar_funil() -> tuple[pd.DataFrame, pd.Timestamp] | None:
     return df.sort_values("posicao_etapa"), ultimo
 
 
-# Filtro lateral → janela gravada pelo sync do kanban
+# Filtro lateral → janela gravada pelo sync do kanban.
+# 'Personalizado' não tem janela própria (o sync não sabe o intervalo de
+# antemão): resolve_janela() tenta casar com uma janela conhecida e, se não
+# der, cai no estoque — sempre avisando na legenda o que está sendo mostrado.
 JANELA_POR_PERIODO = {
     "Últimos 7 dias": "7d",
     "Últimos 30 dias": "30d",
     "Últimos 90 dias": "90d",
+    "Mês atual": "mes_atual",
+    "Mês anterior": "mes_anterior",
 }
+
+
+def resolve_janela(periodo: str, ini: date, fim: date) -> str:
+    """Janela do kanban correspondente ao período do filtro."""
+    if periodo in JANELA_POR_PERIODO:
+        return JANELA_POR_PERIODO[periodo]
+    # Personalizado: casa com uma janela conhecida quando o intervalo coincide
+    hoje = hoje_local()
+    if fim == hoje:
+        dur = (fim - ini).days + 1
+        if dur == 7:
+            return "7d"
+        if dur == 30:
+            return "30d"
+        if dur == 90:
+            return "90d"
+        if ini == hoje.replace(day=1):
+            return "mes_atual"
+    fim_mes_ant = hoje.replace(day=1) - timedelta(days=1)
+    if ini == fim_mes_ant.replace(day=1) and fim == fim_mes_ant:
+        return "mes_anterior"
+    return "estoque"
 
 
 # ── Recortes ─────────────────────────────────────────────────────────

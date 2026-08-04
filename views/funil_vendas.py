@@ -166,7 +166,7 @@ def render(ctx: dict) -> None:
 
     # ── Kanban (segue setor + período) ───────────────────────────────
     with col_kanban:
-        _render_kanban(ctx["funil"], setor, ctx.get("periodo", ""))
+        _render_kanban(ctx["funil"], setor, ctx.get("periodo", ""), ini, fim)
 
     st.divider()
 
@@ -245,12 +245,13 @@ def render(ctx: dict) -> None:
                        + ("" if setor == "Todos" else f" · somente {setor.lower()}"))
 
 
-def _render_kanban(funil, setor: str, periodo: str = "") -> None:
+def _render_kanban(funil, setor: str, periodo: str = "", ini=None, fim=None) -> None:
     """Kanban do Jetimob — um contrato por vez, seguindo setor e período.
 
-    Só conta oportunidades **abertas** (ganhas e perdidas ficam de fora).
-    Com 7/30/90 dias, mostra as criadas no período; nos demais filtros, o
-    estoque acumulado (o sync só grava essas três janelas).
+    Só conta oportunidades **abertas** (ganhas e perdidas ficam de fora) e usa
+    a mesma janela do filtro lateral, para não mostrar um recorte diferente do
+    resto da aba. Um período personalizado que não case com nenhuma janela
+    gravada cai no estoque — e a legenda diz isso.
     """
     if funil is None:
         st.markdown(
@@ -264,9 +265,9 @@ def _render_kanban(funil, setor: str, periodo: str = "") -> None:
         return
 
     df_todas, snapshot_em = funil
-    janela = dados.JANELA_POR_PERIODO.get(periodo, "estoque")
+    janela = dados.resolve_janela(periodo, ini, fim) if ini and fim else "estoque"
     df_funil = df_todas[df_todas["janela"] == janela]
-    if df_funil.empty:  # snapshot antigo, sem janelas
+    if df_funil.empty:  # snapshot antigo (antes das janelas) ou janela ausente
         df_funil, janela = df_todas[df_todas["janela"] == "estoque"], "estoque"
     contratos = sorted(df_funil["contrato"].unique().tolist())
 
@@ -286,7 +287,10 @@ def _render_kanban(funil, setor: str, periodo: str = "") -> None:
 
     rotulo_janela = {"7d": "criadas nos últimos 7 dias",
                      "30d": "criadas nos últimos 30 dias",
-                     "90d": "criadas nos últimos 90 dias"}.get(janela, "abertas (estoque total)")
+                     "90d": "criadas nos últimos 90 dias",
+                     "mes_atual": "criadas no mês atual",
+                     "mes_anterior": "criadas no mês anterior",
+                     }.get(janela, "abertas (estoque acumulado, todas as datas)")
 
     if total == 0:
         st.info(f"Kanban de {escolhido}: nenhuma oportunidade {rotulo_janela}.")
@@ -303,8 +307,10 @@ def _render_kanban(funil, setor: str, periodo: str = "") -> None:
         connector=dict(line=dict(color=tema.HAIRLINE, width=1)),
         hovertemplate="%{y}: <b>%{x} oportunidades</b><br>R$ %{customdata:,.0f} em jogo<extra></extra>",
     ))
+    nome_janela = {"7d": "7 dias", "30d": "30 dias", "90d": "90 dias",
+                   "mes_atual": "mês atual", "mes_anterior": "mês anterior"}.get(janela)
     titulo = (f"Kanban — {escolhido} ({num(total)} abertas)" if janela == "estoque"
-              else f"Kanban {janela} — {escolhido} ({num(total)} novas)")
+              else f"Kanban {nome_janela} — {escolhido} ({num(total)} novas)")
     fig.update_layout(title=titulo, height=300, showlegend=False)
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
@@ -315,5 +321,6 @@ def _render_kanban(funil, setor: str, periodo: str = "") -> None:
         f"(**{brl_compacto(valor_total)}** em jogo, {num(int(fechamento))} em fechamento). "
         "Só oportunidades **abertas** — ganhas e perdidas não entram."
         + ("" if janela != "estoque" else
-           " Escolha 7/30/90 dias na lateral para ver só as do período.")
+           " ⚠️ Este período não tem recorte próprio no kanban, então aqui está o "
+           "acumulado. Use 7/30/90 dias, mês atual ou mês anterior para casar com o filtro.")
     )

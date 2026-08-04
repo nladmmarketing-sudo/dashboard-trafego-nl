@@ -194,13 +194,21 @@ def main() -> None:
             sys.exit("❌ Não consegui mapear os funis (funnel_id). API mudou?")
         print(f"🔀 Funis: {funnels}")
 
-        # 'estoque' = tudo que está aberto hoje; 7d/30d/90d = aberto E criado na
-        # janela, para o painel acompanhar o filtro de período da barra lateral.
+        # Uma janela para cada opção do filtro lateral, para o kanban nunca
+        # mostrar um recorte diferente do resto da aba.
+        #   estoque      = tudo que está aberto hoje
+        #   7d/30d/90d   = aberto E criado na janela móvel
+        #   mes_atual / mes_anterior = aberto E criado no mês civil
         hoje = date.today()
+        ini_mes = hoje.replace(day=1)
+        fim_mes_ant = ini_mes - timedelta(days=1)
+        ini_mes_ant = fim_mes_ant.replace(day=1)
         janelas = [("estoque", "", ""),
                    ("7d", hoje - timedelta(days=6), hoje),
                    ("30d", hoje - timedelta(days=29), hoje),
-                   ("90d", hoje - timedelta(days=89), hoje)]
+                   ("90d", hoje - timedelta(days=89), hoje),
+                   ("mes_atual", ini_mes, hoje),
+                   ("mes_anterior", ini_mes_ant, fim_mes_ant)]
 
         for contrato, funnel_id in funnels.items():
             print(f"📋 Kanban {contrato}…")
@@ -215,9 +223,9 @@ def main() -> None:
     for l in linhas:
         if l["janela"] == "estoque":
             print(f"   {l['contrato']:10s} {l['etapa']:30s} {l['qtd']:4d}  R$ {l['valor_total']:>12,.2f}")
-    for jan in ("7d", "30d", "90d"):
+    for jan in ("7d", "30d", "90d", "mes_atual", "mes_anterior"):
         tot = sum(l["qtd"] for l in linhas if l["janela"] == jan)
-        print(f"   └ janela {jan:4s}: {tot} oportunidades criadas no período (ainda abertas)")
+        print(f"   └ janela {jan:13s}: {tot} oportunidades criadas no período (ainda abertas)")
 
     if args.dry_run:
         print("🔍 dry-run: nada gravado.")
