@@ -24,7 +24,8 @@ import json
 import sys
 import tomllib
 import urllib.request
-from datetime import datetime, timezone
+import time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 BASE_URL = "https://app.jetimob.com"
@@ -84,21 +85,30 @@ def fetch_funnels(page) -> dict[str, int]:
     return mapa
 
 
-def snapshot_contrato(page, contrato: str, funnel_id: int) -> list[dict]:
+def snapshot_contrato(page, contrato: str, funnel_id: int,
+                      janela: str = "estoque", desde: str = "", ate: str = "") -> list[dict]:
     """Contagem por etapa direto dos totais que a API do kanban já devolve.
 
     A API expõe, em cada etapa, `total` (nº de oportunidades) e `amount_price`
     (soma em centavos) — números idênticos aos do kanban na tela do Jetimob.
     Usar isso em vez de paginar item a item é ~60× mais rápido (1 request em
     vez de ~128 páginas) e não corre risco de perder itens no meio da paginação.
-    Auditado em 04/08/2026: bateu etapa a etapa com a tela do Jetimob.
+
+    **status=abertas** é obrigatório: com `status=` (vazio) a API soma também as
+    perdidas e ganhas — era o que inflava o kanban do painel (ex.: Visita
+    aparecia 315 quando as abertas eram 123; o resto eram 191 perdidas + 1 ganha).
+    É o mesmo filtro que a interface do Jetimob usa.
+
+    `janela`: 'estoque' = todas as abertas; '7d'/'30d'/'90d' = só as criadas no
+    período (createdDate[0]/[1] — o formato de array é o único que a API aceita).
     """
+    filtro_data = f"&createdDate[0]={desde}&createdDate[1]={ate}" if desde else ""
     url = (
         f"{BASE_URL}/api/oportunidades/kanban"
-        f"?busca=&funnel_id={funnel_id}&contrato={contrato}&responsavel=&status="
+        f"?busca=&funnel_id={funnel_id}&contrato={contrato}&responsavel=&status=abertas"
         f"&atualizacao=&etapa=&temperatura=&fonte_prospeccao=&portal="
         f"&rede_social=&createdDate=&updatedDate=&agendamento=&labels="
-        f"&headquarter=&page=1"
+        f"&headquarter=&page=1{filtro_data}"
     )
     payload = fetch_json(page, url)
     if not payload or "data" not in payload:
@@ -117,11 +127,11 @@ def snapshot_contrato(page, contrato: str, funnel_id: int) -> list[dict]:
         # amount_price vem em centavos
         valor = round(int(etapa.get("amount_price") or 0) / 100, 2)
         linhas.append({"contrato": contrato, "etapa": nome, "posicao_etapa": i,
-                       "qtd": qtd, "valor_total": valor})
+                       "qtd": qtd, "valor_total": valor, "janela": janela})
 
     total_api = int(data.get("total_items") or 0)
     soma = sum(l["qtd"] for l in linhas)
-    print(f"    {len(linhas)} etapas · {soma} oportunidades (API informa {total_api})")
+    print(f"    [{janela:7}] {len(linhas)} etapas · {soma} abertas (API informa {total_api})")
     if total_api and soma != total_api:
         print(f"    ⚠️ divergência: soma das etapas ({soma}) ≠ total_items ({total_api})")
     return linhas
@@ -184,14 +194,30 @@ def main() -> None:
             sys.exit("❌ Não consegui mapear os funis (funnel_id). API mudou?")
         print(f"🔀 Funis: {funnels}")
 
+        # 'estoque' = tudo que está aberto hoje; 7d/30d/90d = aberto E criado na
+        # janela, para o painel acompanhar o filtro de período da barra lateral.
+        hoje = date.today()
+        janelas = [("estoque", "", ""),
+                   ("7d", hoje - timedelta(days=6), hoje),
+                   ("30d", hoje - timedelta(days=29), hoje),
+                   ("90d", hoje - timedelta(days=89), hoje)]
+
         for contrato, funnel_id in funnels.items():
             print(f"📋 Kanban {contrato}…")
-            linhas += [dict(l, snapshot_em=agora) for l in snapshot_contrato(page, contrato, funnel_id)]
+            for janela, desde, ate in janelas:
+                linhas += [dict(l, snapshot_em=agora) for l in
+                           snapshot_contrato(page, contrato, funnel_id, janela,
+                                             str(desde), str(ate))]
+                time.sleep(0.4)  # o Jetimob derruba requisições em rajada
         ctx.close()
 
-    print(f"\n📊 {len(linhas)} etapas capturadas")
+    print(f"\n📊 {len(linhas)} linhas capturadas")
     for l in linhas:
-        print(f"   {l['contrato']:10s} {l['etapa']:30s} {l['qtd']:4d}  R$ {l['valor_total']:>12,.2f}")
+        if l["janela"] == "estoque":
+            print(f"   {l['contrato']:10s} {l['etapa']:30s} {l['qtd']:4d}  R$ {l['valor_total']:>12,.2f}")
+    for jan in ("7d", "30d", "90d"):
+        tot = sum(l["qtd"] for l in linhas if l["janela"] == jan)
+        print(f"   └ janela {jan:4s}: {tot} oportunidades criadas no período (ainda abertas)")
 
     if args.dry_run:
         print("🔍 dry-run: nada gravado.")

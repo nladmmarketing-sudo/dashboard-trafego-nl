@@ -388,11 +388,15 @@ def _custos_demo() -> pd.DataFrame:
 
 
 def carregar_funil() -> tuple[pd.DataFrame, pd.Timestamp] | None:
-    """Último snapshot do kanban. None = tabela ausente ou nunca sincronizada."""
+    """Último snapshot do kanban (todas as janelas). None = nunca sincronizado.
+
+    Cada linha tem `janela`: 'estoque' (tudo que está aberto) ou '7d'/'30d'/'90d'
+    (aberto E criado no período) — o painel escolhe conforme o filtro lateral.
+    """
     try:
         linhas = buscar_tabela(
             "funil_snapshot",
-            select="snapshot_em,contrato,etapa,posicao_etapa,qtd,valor_total",
+            select="snapshot_em,contrato,etapa,posicao_etapa,qtd,valor_total,janela",
         )
     except TabelaInexistente:
         return None
@@ -403,7 +407,18 @@ def carregar_funil() -> tuple[pd.DataFrame, pd.Timestamp] | None:
     ultimo = df["snapshot_em"].max()
     df = df[df["snapshot_em"] == ultimo].copy()
     df["valor_total"] = pd.to_numeric(df["valor_total"], errors="coerce").fillna(0)
+    if "janela" not in df.columns:          # snapshots antigos, antes das janelas
+        df["janela"] = "estoque"
+    df["janela"] = df["janela"].fillna("estoque")
     return df.sort_values("posicao_etapa"), ultimo
+
+
+# Filtro lateral → janela gravada pelo sync do kanban
+JANELA_POR_PERIODO = {
+    "Últimos 7 dias": "7d",
+    "Últimos 30 dias": "30d",
+    "Últimos 90 dias": "90d",
+}
 
 
 # ── Recortes ─────────────────────────────────────────────────────────

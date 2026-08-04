@@ -100,6 +100,7 @@ with st.spinner("Carregando dados do Supabase…"):
     pagamentos = dados.carregar_pagamentos()  # boletos pagos
 
 ctx = {
+    "periodo": opcao_periodo,
     "ini": ini,
     "fim": fim,
     "canais": canais_sel,
