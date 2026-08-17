@@ -9,6 +9,7 @@ Fontes:
 - funil_snapshot       → fotografia do kanban por etapa (sync_funil_jetimob.py)
 """
 
+import json
 import os
 import unicodedata
 from datetime import date, timedelta
@@ -385,6 +386,24 @@ def _custos_demo() -> pd.DataFrame:
         for i, (c, it, v) in enumerate(itens)
     ]
     return pd.DataFrame(linhas)[_COLS_CUSTOS]
+
+
+def carregar_reach_meta() -> dict:
+    """Alcance único real do Meta por janela, pré-calculado pelo n8n em config.reach_meta.
+
+    Reach não é somável (o Meta deduplica por período), então guardamos o valor
+    certo de cada janela padrão (7/30/90d, mês atual/anterior). Retorna {} se ainda
+    não houver dado. Google não é incluído (rede de pesquisa não mede alcance)."""
+    try:
+        linhas = buscar_tabela("config", select="valor", filtros="chave=eq.reach_meta")
+    except TabelaInexistente:
+        return {}
+    if not linhas:
+        return {}
+    try:
+        return json.loads(linhas[0]["valor"])
+    except (ValueError, KeyError, TypeError):
+        return {}
 
 
 def carregar_funil() -> tuple[pd.DataFrame, pd.Timestamp] | None:

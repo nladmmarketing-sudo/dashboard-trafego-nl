@@ -98,6 +98,7 @@ with st.spinner("Carregando dados do Supabase…"):
     funil = dados.carregar_funil()      # None = sem snapshot
     custos = dados.carregar_custos()    # None = tabela custos pendente
     pagamentos = dados.carregar_pagamentos()  # boletos pagos
+    reach_meta = dados.carregar_reach_meta()  # alcance real Meta por janela (n8n)
 
 ctx = {
     "periodo": opcao_periodo,
@@ -111,6 +112,7 @@ ctx = {
     "funil": funil,
     "custos": custos,
     "pagamentos": pagamentos,
+    "reach_meta": reach_meta,
 }
 
 st.markdown("## Tráfego Pago — NL Imóveis")

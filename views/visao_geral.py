@@ -81,6 +81,12 @@ def _secao_midia(ctx):
     ini, fim, canais = ctx["ini"], ctx["fim"], ctx["canais"]
     ini_ant, fim_ant = dados.janela_anterior(ini, fim)
 
+    # Alcance único real do Meta (pré-calculado pelo n8n; None em período personalizado)
+    _rm = (ctx.get("reach_meta") or {}).get("janelas", {}).get(ctx.get("periodo"), {})
+    reach_real = _rm.get("reach")
+    reach_real_ant = _rm.get("reach_ant")
+    freq_real = _rm.get("frequencia")
+
     ads_per = _ads_do_periodo(ctx["ads"], ini, fim, canais)
     ads_ant = _ads_do_periodo(ctx["ads"], ini_ant, fim_ant, canais)
     tem_ads = ads_per is not None and not ads_per.empty
@@ -141,9 +147,14 @@ def _secao_midia(ctx):
                ajuda="Leads de formulário + conversas iniciadas (WhatsApp/Direct)")
     _scorecard(c3, "Cliques no link", v(cliques, lambda x: num(x)),
                delta_pct(cliques, cliques_a), sr_cliques, tema.COR_CLIQUES)
-    _scorecard(c4, "Impressões", v(impress, lambda x: num(x)),
-               delta_pct(impress, impress_a), sr_impress, tema.COR_ALCANCE,
-               ajuda="Total de impressões — quantas vezes os anúncios apareceram (somável, diferente de alcance único)")
+    if reach_real is not None:
+        _scorecard(c4, "Alcance (Meta)", v(reach_real, lambda x: num(x)),
+                   delta_pct(reach_real, reach_real_ant), sr_impress, tema.COR_ALCANCE,
+                   ajuda="Pessoas únicas alcançadas no Meta no período (dedup real). Google não entra — a rede de pesquisa não mede alcance.")
+    else:
+        _scorecard(c4, "Impressões", v(impress, lambda x: num(x)),
+                   delta_pct(impress, impress_a), sr_impress, tema.COR_ALCANCE,
+                   ajuda="Total de impressões — quantas vezes os anúncios apareceram (o alcance único real aparece nos períodos padrão)")
     _scorecard(c5, "Video plays", v(video, lambda x: num(x)),
                delta_pct(video, video_a), sr_video, tema.COR_VIDEO)
 
@@ -152,7 +163,7 @@ def _secao_midia(ctx):
     cpc = (spend / cliques) if cliques else None
     cpm = (spend / impress * 1000) if impress else None
     cpr = (spend / resultados) if resultados else None
-    freq = (impress / alcance) if alcance else None
+    freq = freq_real if freq_real is not None else ((impress / alcance) if alcance else None)
     taxa_result = (resultados / cliques) if cliques else None
 
     e1, e2, e3, e4, e5, e6 = st.columns(6)
@@ -161,7 +172,7 @@ def _secao_midia(ctx):
     e3.metric("CPM", v(cpm, lambda x: brl(x, 2)), help="Custo por mil impressões")
     e4.metric("CPR", v(cpr, lambda x: brl(x, 2)), help="Custo por resultado (lead/conversa)")
     e5.metric("Frequência", v(freq, lambda x: f"{x:.2f}".replace(".", ",")),
-              help="Média de vezes que cada pessoa viu o anúncio. Acima de ~3-4 = saturação.")
+              help="Média de vezes que cada pessoa viu o anúncio no Meta (impressões ÷ alcance único real). Acima de ~3-4 = saturação.")
     e6.metric("Result./clique", v(taxa_result, lambda x: pct(x, 2)),
               help="Taxa de resultado: resultados ÷ cliques no link")
 
@@ -172,8 +183,8 @@ def _secao_midia(ctx):
 
     with col_funil:
         if tem_ads:
-            etapas = ["Impressões", "Alcance", "Cliques", "Resultados"]
-            valores = [impress, alcance, cliques, resultados]
+            etapas = ["Impressões", "Cliques", "Resultados"]
+            valores = [impress, cliques, resultados]
             base = valores[0] or 1
             rotulos = [
                 f"{num_compacto(val)}  ·  {_pct_funil(val / base)}"
