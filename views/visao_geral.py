@@ -115,6 +115,7 @@ def _secao_midia(ctx):
     result_a = soma(ads_ant, "leads") + soma(ads_ant, "mensagens")
     cliques_a = soma(ads_ant, "cliques_link") or soma(ads_ant, "cliques")
     alcance_a = soma(ads_ant, "alcance")
+    impress_a = soma(ads_ant, "impressoes")
     video_a = soma(ads_ant, "video_plays")
 
     # Séries diárias para os sparklines
@@ -124,6 +125,7 @@ def _secao_midia(ctx):
     sr_result = sr_leads + sr_msg
     sr_cliques = _serie_diaria(ads_per, "dia", ini, fim, "cliques_link")
     sr_alcance = _serie_diaria(ads_per, "dia", ini, fim, "alcance")
+    sr_impress = _serie_diaria(ads_per, "dia", ini, fim, "impressoes")
     sr_video = _serie_diaria(ads_per, "dia", ini, fim, "video_plays")
 
     def v(x, fmt):
@@ -139,9 +141,9 @@ def _secao_midia(ctx):
                ajuda="Leads de formulário + conversas iniciadas (WhatsApp/Direct)")
     _scorecard(c3, "Cliques no link", v(cliques, lambda x: num(x)),
                delta_pct(cliques, cliques_a), sr_cliques, tema.COR_CLIQUES)
-    _scorecard(c4, "Alcance", v(alcance, lambda x: num(x)),
-               delta_pct(alcance, alcance_a), sr_alcance, tema.COR_ALCANCE,
-               ajuda="Pessoas únicas alcançadas")
+    _scorecard(c4, "Impressões", v(impress, lambda x: num(x)),
+               delta_pct(impress, impress_a), sr_impress, tema.COR_ALCANCE,
+               ajuda="Total de impressões — quantas vezes os anúncios apareceram (somável, diferente de alcance único)")
     _scorecard(c5, "Video plays", v(video, lambda x: num(x)),
                delta_pct(video, video_a), sr_video, tema.COR_VIDEO)
 
